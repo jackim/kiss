@@ -28,7 +28,11 @@ void Loop::start()
             if(!poll(_timeout))
                 break;
         }while(_flag);
+        
     });
+
+    _thd.get_id();
+
 
 }
 
@@ -59,6 +63,7 @@ bool Loop::poll(int timeout)
         
     }
     else{
+        std::lock_guard<std::recursive_mutex> guard(_mutex);
         for( auto i = 0 ; i < count ; i++)
         {
             auto fd = _events[i].data.fd;
@@ -114,12 +119,16 @@ bool Loop::poll(int timeout)
 
 bool Loop::addEvent(Event *e , int fd ,  uint32_t events)
 {
-    if(_map.count(fd) > 0)
     {
-        SPDLOG_WARN("addEvent this fd {} already in map!" , fd);
-        return false;
+        std::lock_guard<std::recursive_mutex> guard(_mutex); 
+        if(_map.count(fd) > 0)
+        {
+            SPDLOG_WARN("addEvent this fd {} already in map!" , fd);
+            return false;
+        }
+        _map[fd] = e;
     }
-    _map[fd] = e;
+
     epoll_event ev;
     ev.events = events;
     ev.data.fd = fd;
@@ -136,12 +145,16 @@ bool Loop::addEvent(Event *e , int fd ,  uint32_t events)
 
 bool Loop::delEvent(Event * e , int fd ,  uint32_t )
 {
-    if(_map.count(fd) == 0)
     {
-        SPDLOG_WARN("delEvent thid fd {} isn't exist in map" , fd);
-        return false;
+        std::lock_guard<std::recursive_mutex> guard(_mutex); 
+        if(_map.count(fd) == 0)
+        {
+            SPDLOG_WARN("delEvent thid fd {} isn't exist in map" , fd);
+            return false;
+        }
+        _map.erase(fd);
     }
-    _map.erase(fd);
+
     epoll_event ev;
     ev.data.ptr = e;
     return epoll_ctl(_epfd , EPOLL_CTL_DEL , fd , &ev) >= 0;

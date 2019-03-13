@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <queue>
+#include <mutex>
 
 #include "event.hpp"
 #include "loop.hpp"
@@ -47,6 +48,7 @@ private:
     Loop*   _loop;
     int     _fd = -1;
     std::queue<WriteBuf> _queue;
+    std::recursive_mutex  _mutex;
     int     _events;
 
     std::function<void (const char *data , int len)> _data = nullptr;

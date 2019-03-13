@@ -40,10 +40,12 @@ void Base::close(bool del)
     {
         _loop->delEvent(this , _fd , _events);
         ::close(_fd);
+        _fd = -1;
         if(del)
             delete this;
     }
 }
+
 
 void Base::onClose()
 {
@@ -86,6 +88,7 @@ void Base::scheduleWrite()
 
 bool Base::onWrite()
 {
+    std::lock_guard<std::recursive_mutex> guard(_mutex);
     if(_queue.empty())
     {
         SPDLOG_ERROR("empty writebuffer");
@@ -131,35 +134,46 @@ bool Base::onWrite()
 
 void Base::write(const char *data , int len , std::function<void ()> finish)
 {
-    auto count = send(_fd , data , len ,0 );
     int left = 0;
     char *buf = nullptr;
-    if( count == len)
+
+    std::lock_guard<std::recursive_mutex> guard(_mutex);
+    if(!_queue.empty())
     {
-        if(finish != nullptr)
-        {
-            finish();
-        }
-        return ;
-    }
-    else if(count >= 0)
-    {
-        left = len - count;
+        left = len;
         buf = new char[left];
-        memcpy(buf , data + count , left);
+        memcpy(buf , data  , left);
     }
     else{
-            if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+        auto count = send(_fd , data , len ,0 );
+    
+        if( count == len)
+        {
+            if(finish != nullptr)
             {
-                left = count;
-                buf = new char[left];
-                memcpy(buf , data  , left);
+                finish();
             }
-            else
-            {
-                SPDLOG_ERROR("this fd {} send errno {} {}" , _fd , errno , strerror(errno));
-                return ;
-            }
+            return ;
+        }
+        else if(count >= 0)
+        {
+            left = len - count;
+            buf = new char[left];
+            memcpy(buf , data + count , left);
+        }
+        else{
+                if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+                {
+                    left = count;
+                    buf = new char[left];
+                    memcpy(buf , data  , left);
+                }
+                else
+                {
+                    SPDLOG_ERROR("this fd {} send errno {} {}" , _fd , errno , strerror(errno));
+                    return ;
+                }
+        }
     }
     WriteBuf wbuf;
     wbuf.buf.data = buf;

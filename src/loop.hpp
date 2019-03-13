@@ -2,6 +2,7 @@
 #define KISS_LOOP_HPP
 
 #include <unordered_map>
+#include <mutex>
 #include "common.hpp"
 #include "event.hpp"
 #include "buf.hpp"
@@ -31,16 +32,17 @@ public:
 
     Buf getBuf();
     
+    
 
 private:
-    int         _epfd;
-    epoll_event _events[MAX_EVENT_NUM];
-    bool        _flag;
-    int         _timeout;
-    std::thread _thd;
+    int             _epfd;
+    epoll_event     _events[MAX_EVENT_NUM];
+    bool            _flag;
+    int             _timeout;
+    std::thread     _thd;
     std::unordered_map<int , Event *> _map;
-    Buf         _buf;
-
+    Buf             _buf;
+    std::recursive_mutex      _mutex;
 };
 }}
 
