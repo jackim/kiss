@@ -10,7 +10,7 @@ public:
     virtual bool onRead() = 0;
     virtual bool onWrite() = 0;
 
-    virtual ~Event() {};
+    
 };
 }}
 

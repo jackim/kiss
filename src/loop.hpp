@@ -24,6 +24,8 @@ public:
 
     void stop();
 
+    void join();
+
     bool addEvent(Event *e , int fd ,   uint32_t events);
 
     bool modEvent(Event *e , int fd , uint32_t events);

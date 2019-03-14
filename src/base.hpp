@@ -21,7 +21,7 @@ public:
     void setCloseCB(std::function<bool ()> close);
     void close(bool del = true);
     void write(const char *data , int len , std::function<void ()> finish = nullptr);
-    
+    virtual ~Base() {};
 protected:
     static void open(Base *base , int fd , uint32_t events);
     void open(int fd , uint32_t events);

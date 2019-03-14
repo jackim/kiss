@@ -41,9 +41,18 @@ void Loop::stop()
     if(_flag)
     {
         _flag = false;
+    }
+}
+
+void Loop::join()
+{
+    if(_flag)
+    {
         _thd.join();
     }
 }
+
+
 
 bool Loop::poll(int timeout)
 {
