@@ -14,7 +14,7 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/libs)
 link_directories(${PROJECT_BINARY_DIR}/libs)
 
 
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/third/spdlog/include )
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/third/spdlog/include ${PROJECT_SOURCE_DIR}/third )
 
 add_library(kiss  ${DIR_SRCS})
 
