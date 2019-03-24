@@ -7,7 +7,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/src DIR_SRCS)
+aux_source_directory(${PROJECT_SOURCE_DIR}/src  DIR_SRCS)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/libs)
 
@@ -16,7 +16,7 @@ link_directories(${PROJECT_BINARY_DIR}/libs)
 
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/third/spdlog/include ${PROJECT_SOURCE_DIR}/third )
 
-add_library(kiss  ${DIR_SRCS})
+add_library(kiss  ${DIR_SRCS} ${PROJECT_SOURCE_DIR}/third/http-parser/http_parser.c)
 
 add_subdirectory(examples)
 

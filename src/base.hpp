@@ -22,6 +22,10 @@ public:
     void close(bool del = true);
     void write(const char *data , int len , std::function<void ()> finish = nullptr);
     virtual ~Base() {};
+    Loop* getLoop()
+    {
+        return _loop;
+    }
 protected:
     static void open(Base *base , int fd , uint32_t events);
     void open(int fd , uint32_t events);
@@ -33,10 +37,7 @@ protected:
     { 
         return _fd;
     }
-    Loop* getLoop()
-    {
-        return _loop;
-    }
+
 private:
 
     struct WriteBuf
@@ -50,7 +51,6 @@ private:
     std::queue<WriteBuf> _queue;
     std::recursive_mutex  _mutex;
     int     _events;
-
     std::function<void (const char *data , int len)> _data = nullptr;
     std::function<bool ()>                           _close = nullptr;
 };

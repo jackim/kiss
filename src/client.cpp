@@ -47,11 +47,13 @@ void Client::connect(const std::string &host ,
     {
         SPDLOG_INFO("connect {} {} in process" , host.c_str() , service.c_str());
         Base::open(sock , EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLERR);
+        freeaddrinfo(result);
         return;
     }
     else if( rc == -1)
     {
         SPDLOG_INFO("connect errno {} {}" , errno , strerror(errno));
+        freeaddrinfo(result);
         return;
     }
     
