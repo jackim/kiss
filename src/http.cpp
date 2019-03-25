@@ -49,7 +49,6 @@ void Http::write(const char *data , int len , std::function<void ()> finish )
 int Http::on_message_begin(http_parser *p)
 {
     Http *h = (Http*)p->data;
-    h->_isFinsh = false;
     return 0;
 }
 
@@ -122,6 +121,12 @@ int Http:: on_chunk_complete(http_parser*)
 
 void Http::onData(const char *data , int len)
 {
+    if(_isFinsh)
+    {
+        http_parser_init(_parser, HTTP_REQUEST);
+        _isFinsh = false;
+    }
+
     auto nparsed = http_parser_execute(_parser , &_settings , data , len);
     if(_parser->upgrade)
     {
@@ -163,7 +168,6 @@ void Http::onData(const char *data , int len)
 
 
         onProcess(request);
-        http_parser_init(_parser, HTTP_REQUEST); 
     }
 
 }

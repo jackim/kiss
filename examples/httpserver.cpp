@@ -15,9 +15,15 @@ class Controller: public Http
 
     virtual void onProcess(Request *request)
     {
-       std::string str = "HTTP/1.1 200 OK\r\nServer: kiss\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
-       auto http = request->http;
+       std::string str = "";
+       
        bool should_keepalive = request->should_keepalive;
+       if(should_keepalive)
+            str = "HTTP/1.1 200 OK\r\nServer: kiss\r\nConnection：keep-alive\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+        else
+            str = "HTTP/1.1 200 OK\r\nServer: kiss\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+
+       auto http = request->http;
        http->write(str.c_str() , str.length() , [http ,should_keepalive](){
            if(!should_keepalive)
                 http->close();
