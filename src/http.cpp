@@ -166,8 +166,10 @@ void Http::onData(const char *data , int len)
         request->method = http_method_str((http_method)_parser->method);
         request->should_keepalive = http_should_keep_alive(_parser);
 
-
-        onProcess(request);
+        if(_parser->upgrade)
+            onUpgrade(request);
+        else
+            onHttp(request);
     }
 
 }

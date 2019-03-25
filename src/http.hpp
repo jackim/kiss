@@ -13,7 +13,8 @@ class Http
 public:
     Http(Base *base);
     virtual ~Http(){ free(_parser);}
-    virtual void onProcess(Request *request){}
+    virtual void onHttp(Request *request){}
+    virtual void onUpgrade(Request *request){}
     void close();
     void write(const char *data , int len , std::function<void ()> finish = nullptr);
 protected:

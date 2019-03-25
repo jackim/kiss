@@ -4,3 +4,6 @@
 [submodule "third/http-parser"]
 	path = third/http-parser
 	url = https://github.com/nodejs/http-parser
+[submodule "third/sha1"]
+	path = third/sha1
+	url = https://github.com/983/SHA1.git

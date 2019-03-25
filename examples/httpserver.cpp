@@ -13,7 +13,7 @@ class Controller: public Http
     Controller(Base *base):Http(base)
     {}
 
-    virtual void onProcess(Request *request)
+    virtual void onHttp(Request *request)
     {
        std::string str = "";
        
