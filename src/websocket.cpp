@@ -4,7 +4,7 @@
 using namespace jackim::kiss;
 
 
-#define SEC_WEBSOCKET_KEY "Sec-Websocket-Key"
+#define SEC_WEBSOCKET_KEY "Sec-WebSocket-Key"
 #define SEC_WEBSOCKET_ACCEPT "Sec-WebSocket-Accept"
 #define SEC_WEBSOCKET_PROTOCOL "Sec-WebSocket-Protocol"
 #define RFC6544_MAGIC_KEY "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -12,6 +12,10 @@ using namespace jackim::kiss;
 "Upgrade: websocket\r\n"    \
 "Connection: Upgrade\r\n"
 
+WebSocket::WebSocket(Base *base):Http(base)
+{
+
+}
 
 void WebSocket::onUpgrade(Request *request)
 {
@@ -21,10 +25,11 @@ void WebSocket::onUpgrade(Request *request)
 
     if(request->header.count(SEC_WEBSOCKET_KEY) > 0)
     {
-        text += request->header[SEC_WEBSOCKET_KEY];
-        text += RFC6544_MAGIC_KEY;
+        std::string key;
+        key += request->header[SEC_WEBSOCKET_KEY];
+        key += RFC6544_MAGIC_KEY;
         char base64[SHA1_BASE64_SIZE];
-        sha1(text.c_str()).finalize().print_base64(base64);
+        sha1(key.c_str()).finalize().print_base64(base64);
         text += SEC_WEBSOCKET_ACCEPT;
         text += ": " ;
         text += base64;
@@ -42,14 +47,15 @@ void WebSocket::onUpgrade(Request *request)
     write(text.c_str() , text.length());
 
     auto data = std::bind(&WebSocket::onWSData , this , std::placeholders::_1 , std::placeholders::_2);
+    auto close = std::bind(&WebSocket::onWSClose , this);
     _base->setDataCB(data);
-
+    _base->setCloseCB(close);
     return onEstablished();
 }
 
 void WebSocket::onWSData(const char *data , int len)
 {
-    _buffer.insert(_buffer.begin() , data , data + len);
+    _buffer.insert(_buffer.end() , data , data + len);
     std::vector<char> out;
     int buflen = 0;
     int parsed = 0;
@@ -64,32 +70,56 @@ void WebSocket::onWSData(const char *data , int len)
         {
             out.assign(_buffer.data() + parsed , _buffer.data() + _buffer.size());
             _buffer = std::move(out);
-            break;
+            return;
         }
         else if(type == INCOMPLETE_TEXT_FRAME){
-            onTextFrame(out , false);
+            onTextFrame(out , FRAME_STR);
+            _lastType = type;
             parsed += buflen;
         }
         else if(type == TEXT_FRAME)
         {
-            onTextFrame(out , true);
+            onTextFrame(out , FRAME_FIN);
             parsed += buflen;
         }
         else if(type == INCOMPLETE_BINARY_FRAME)
         {
-            onBinaryFrame(out ,false);
+            onBinaryFrame(out ,FRAME_STR);
+            _lastType = type;
             parsed += buflen;
         }
         else if(type == BINARY_FRAME)
         {
-            onBinaryFrame(out ,true);
+            onBinaryFrame(out ,FRAME_FIN);
             parsed += buflen;
         }
-        else{
-            
+        else if(type == CONTINUATION_FRAME){
+            if(_lastType == INCOMPLETE_TEXT_FRAME)
+            {
+                onTextFrame(out , FRAME_CON);
+            }
+            else
+            {
+                onBinaryFrame(out , FRAME_CON);
+            }
+        }
+        else if(type == CLOSING_FRAME)
+        {
+            onCloseFrame();
+            close();
+            break;
+        }
+        else
+        {
+            SPDLOG_ERROR("recv error frame:{0}" , type);
+            onError();
+            close();
+            break;
         }
 
     }while(parsed < _buffer.size());
+
+    _buffer.clear();
 
 }
 
@@ -156,7 +186,11 @@ WebSocket::FrameType WebSocket::parseFrame(const char *in , int in_len ,
     {
         out.assign(buffer + pos , buffer + pos + length);
     }
+
+    buflen = pos + length;
     
+
+
     if (opcode == 0x0) return (fin) ? END_FRAME : CONTINUATION_FRAME;
 	else if (opcode == 0x1) return (fin) ? TEXT_FRAME : INCOMPLETE_TEXT_FRAME;
 	else if (opcode == 0x2) return (fin) ? BINARY_FRAME : INCOMPLETE_BINARY_FRAME;
@@ -164,7 +198,66 @@ WebSocket::FrameType WebSocket::parseFrame(const char *in , int in_len ,
 	else if (opcode == 0x9) return (fin) ? PING_FRAME : ERROR_FRAME;
 	else if (opcode == 0xA) return (fin) ? PONG_FRAME : ERROR_FRAME;
 
-
-
-    
 }
+
+std::vector<char> WebSocket::makeFrame(FrameType type , const char* data , int len)
+{
+    std::vector<char> buffer;
+    buffer.push_back(type);
+
+    if( len <= 125)
+    {
+        buffer.push_back(len);
+    }
+    else if(len <= 0xFFFF)
+    {
+        buffer.push_back(126);
+
+        buffer.push_back((len >> 8) & 0xFF);
+        buffer.push_back(len & 0xFF);
+    }
+    else{
+        buffer.push_back(127);
+
+        buffer.push_back(0);
+        buffer.push_back(0);
+        buffer.push_back(0);
+        buffer.push_back(0);
+
+        buffer.push_back((len >> 24) & 0xFF);
+        buffer.push_back((len >> 16) & 0xFF);
+        buffer.push_back((len >> 8) & 0xFF);
+        buffer.push_back((len) & 0xFF);
+    }
+
+    buffer.insert(buffer.end() , data , data + len);
+
+    return std::move(buffer);
+}
+
+
+std::vector<char> WebSocket::makePongFrame()
+{
+    return makeFrame(PONG_FRAME , nullptr , 0);
+}
+
+std::vector<char> WebSocket::makeTextFrame(const std::vector<char> &text , FrameSeq seq)
+{
+    if(seq == FRAME_STR)
+        return makeFrame(INCOMPLETE_TEXT_FRAME , text.data() , text.size());
+    else if(seq == FRAME_CON)
+        return makeFrame(CONTINUATION_FRAME , text.data() , text.size());
+    else
+        return makeFrame(TEXT_FRAME , text.data() , text.size());
+}
+
+std::vector<char> WebSocket::makeBinaryFrame(const std::vector<char> &binary , FrameSeq seq)
+{
+    if(seq == FRAME_STR)
+        return makeFrame(INCOMPLETE_BINARY_FRAME , binary.data() , binary.size());
+    else if(seq == FRAME_CON)
+        return makeFrame(CONTINUATION_FRAME , binary.data() , binary.size());
+    else
+        return makeFrame(BINARY_FRAME , binary.data() , binary.size());
+}
+ 

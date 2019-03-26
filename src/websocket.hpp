@@ -6,12 +6,30 @@
 
 namespace jackim{ namespace kiss{
 
-
+enum FrameSeq
+{
+    FRAME_STR,      //  first
+    FRAME_CON,      //  continuation
+    FRAME_FIN       //  fin
+};
 
 
 class WebSocket : public Http
 {
 
+public:
+    WebSocket(Base *base);
+    virtual void onEstablished(){}
+    virtual void onPing(){}
+    virtual void onTextFrame(std::vector<char> &text , FrameSeq seq){}
+    virtual void onBinaryFrame(std::vector<char> &binary , FrameSeq seq){}
+    virtual void onError(){}
+    virtual void onClose(){}
+    virtual void onCloseFrame(){}
+    std::vector<char> makePongFrame();
+    std::vector<char> makeTextFrame(const std::vector<char> &text , FrameSeq seq);
+    std::vector<char> makeBinaryFrame(const std::vector<char> &binary , FrameSeq seq);
+    virtual ~WebSocket(){SPDLOG_INFO("1");}
 protected:
 
     enum FrameType
@@ -29,22 +47,14 @@ protected:
         PING_FRAME=0x19,
         PONG_FRAME=0x1A
     };
-
+    std::vector<char> makeFrame(FrameType type , const char *data , int len);
     virtual void onUpgrade(Request *request);
+    void onWSData(const  char *data , int len);
+    bool onWSClose(){ onClose(); return Http::onClose(); }
+    FrameType parseFrame(const  char *in , int in_len ,
+    std::vector< char> &out , int &buflen );
 
-    virtual void onEstablished();
-
-    virtual void onPing();
-
-    virtual void onTextFrame(std::vector<char> &text , bool fin);
     
-    virtual void onBinaryFrame(std::vector<char> &binary , bool fin);
-
-    void onWSData(const char *data , int len);
-
-    FrameType parseFrame(const char *in , int in_len ,
-    std::vector<char> &out , int &buflen );
-
     std::vector<char> _buffer;
     FrameType         _lastType;
 };

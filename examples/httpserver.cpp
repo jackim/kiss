@@ -26,7 +26,9 @@ class Controller: public Http
        auto http = request->http;
        http->write(str.c_str() , str.length() , [http ,should_keepalive](){
            if(!should_keepalive)
+            {
                 http->close();
+            }
        } );
 
        delete request;
