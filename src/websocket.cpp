@@ -1,6 +1,8 @@
 #include "websocket.hpp"
 #include "request.hpp"
 #include "sha1/sha1.hpp"
+#include "utils.hpp"
+
 using namespace jackim::kiss;
 
 
@@ -12,7 +14,7 @@ using namespace jackim::kiss;
 "Upgrade: websocket\r\n"    \
 "Connection: Upgrade\r\n"
 
-WebSocket::WebSocket(Base *base):Http(base)
+WebSocket::WebSocket(Base *base , IWebSocketHandler *handler):Http(base) , _handler(handler)
 {
 
 }
@@ -36,21 +38,35 @@ void WebSocket::onUpgrade(Request *request)
         text +="\r\n";
     }
 
+
+    std::vector<std::string> vecProtocol;
     if(request->header.count(SEC_WEBSOCKET_PROTOCOL) > 0)
     {
+        std::string str = request->header[SEC_WEBSOCKET_PROTOCOL];
+        auto vecProtocol = split(str , ',');
+        auto selectProtocol = _handler->onEstablished(vecProtocol);
+        if(selectProtocol == "")
+        {
+            close();
+            return;
+        }
+
         text += SEC_WEBSOCKET_PROTOCOL;
-        text += ": " + request->header[SEC_WEBSOCKET_PROTOCOL] + "\r\n";
+        text += ": " + selectProtocol + "\r\n";
+        
+    }
+    else
+    {
+        _handler->onEstablished(vecProtocol);
     }
 
     text += "\r\n";
-
     write(text.c_str() , text.length());
-
     auto data = std::bind(&WebSocket::onWSData , this , std::placeholders::_1 , std::placeholders::_2);
     auto close = std::bind(&WebSocket::onWSClose , this);
     _base->setDataCB(data);
     _base->setCloseCB(close);
-    return onEstablished();
+    return ;
 }
 
 void WebSocket::onWSData(const char *data , int len)
@@ -63,7 +79,10 @@ void WebSocket::onWSData(const char *data , int len)
         auto type = parseFrame(_buffer.data() + parsed , (int)_buffer.size() ,out , buflen);
         if(type == PING_FRAME)
         {
-            onPing();
+            out.assign(_buffer.data() + parsed , _buffer.data() + _buffer.size());
+            auto wdata = makePongFrame(out);
+            write(wdata.data() , wdata.size());
+            _handler->onPing(out);
             parsed += buflen;
         }
         else if(type == INCOMPLETE_FRAME)
@@ -73,46 +92,46 @@ void WebSocket::onWSData(const char *data , int len)
             return;
         }
         else if(type == INCOMPLETE_TEXT_FRAME){
-            onTextFrame(out , FRAME_STR);
+            _handler->onTextFrame(out , FRAME_STR);
             _lastType = type;
             parsed += buflen;
         }
         else if(type == TEXT_FRAME)
         {
-            onTextFrame(out , FRAME_FIN);
+            _handler->onTextFrame(out , FRAME_FIN);
             parsed += buflen;
         }
         else if(type == INCOMPLETE_BINARY_FRAME)
         {
-            onBinaryFrame(out ,FRAME_STR);
+            _handler->onBinaryFrame(out ,FRAME_STR);
             _lastType = type;
             parsed += buflen;
         }
         else if(type == BINARY_FRAME)
         {
-            onBinaryFrame(out ,FRAME_FIN);
+            _handler->onBinaryFrame(out ,FRAME_FIN);
             parsed += buflen;
         }
         else if(type == CONTINUATION_FRAME){
             if(_lastType == INCOMPLETE_TEXT_FRAME)
             {
-                onTextFrame(out , FRAME_CON);
+                _handler->onTextFrame(out , FRAME_CON);
             }
             else
             {
-                onBinaryFrame(out , FRAME_CON);
+                _handler->onBinaryFrame(out , FRAME_CON);
             }
         }
         else if(type == CLOSING_FRAME)
         {
-            onCloseFrame();
+            _handler->onCloseFrame();
             close();
             break;
         }
         else
         {
             SPDLOG_ERROR("recv error frame:{0}" , type);
-            onError();
+            _handler->onError();
             close();
             break;
         }
@@ -236,10 +255,18 @@ std::vector<char> WebSocket::makeFrame(FrameType type , const char* data , int l
 }
 
 
-std::vector<char> WebSocket::makePongFrame()
+
+std::vector<char> WebSocket::makePongFrame(const std::vector<char> &data)
 {
-    return makeFrame(PONG_FRAME , nullptr , 0);
+    return makeFrame(PONG_FRAME , data.data() , data.size());
 }
+
+std::vector<char> WebSocket::makePingFrame(const std::vector<char> &data)
+{
+    return makeFrame(PING_FRAME , nullptr , data.size());
+}
+
+
 
 std::vector<char> WebSocket::makeTextFrame(const std::vector<char> &text , FrameSeq seq)
 {

@@ -5,7 +5,7 @@
 #include <mutex>
 #include "common.hpp"
 #include "event.hpp"
-#include "buf.hpp"
+#include "utils.hpp"
 
 #define MAX_EVENT_NUM  256
 #define MAX_BUFFER_LENGTH 4096
